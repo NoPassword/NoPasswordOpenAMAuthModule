@@ -16,7 +16,7 @@
 /**
  * Portions Copyright 2018 Wiacts Inc.
  */
-package com.nopassword.openam;
+package com.nopassword.openam.module;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.identity.shared.debug.Debug;

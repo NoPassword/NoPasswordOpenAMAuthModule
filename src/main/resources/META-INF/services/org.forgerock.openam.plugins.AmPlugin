@@ -18,4 +18,4 @@
 # In this case, we are providing our new plugin, which will then be picked up and executed by OpenAM.
 # For more information on service loading, see the javadoc for the ServiceLoader class.
 # Portions Copyright 2018 Wiacts Inc.
-com.nopassword.openam.NoPasswordAuthPlugin
+com.nopassword.openam.module.NoPasswordAuthPlugin

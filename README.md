@@ -21,11 +21,11 @@ Follow this steps in order to install the module:
 
 ![image](/images/add_module_1.png)
 
-7. Set the NoPassword LoginI Key. Paste you NoPassword Login key from step 4 here.
+7. Set **NoPassword Login Key**. Paste you NoPassword Login key from step 4 here.
 
 ![image alt text](/images/add_module_2.png)
 
-8. Save changes.
+8. Set **Authentication URL** with `https://api.nopassword.com/auth/login`. Save changes.
 9. You can test the NoPassword authentication module by accessing this URL in your browser `https://YOUR_AM_SERVER_HERE/openam/XUI/?realm=/#login/&module=NoPassword`.</br>
 10. Enter your username and hit enter. NoPassword AM Module will search for user email (mail or email attribute) in the data store if email is empty an email address will be generated from user DN. An authentication request will be send to NoPassword through the AM module. NoPassword will verify you username and key. If everything is correct you should get an authentication request on your phone.
 
