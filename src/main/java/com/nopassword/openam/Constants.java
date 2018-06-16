@@ -16,7 +16,7 @@
 /**
  * Portions Copyright 2018 Wiacts Inc.
  */
-package com.nopassword.openam.utils;
+package com.nopassword.openam;
 
 /**
  *
@@ -27,20 +27,24 @@ public class Constants {
     //i18n properties
     public static final String UI_LOGIN_HEADER = "ui-login-header";
     public static final String UI_USERANAME_PROMPT = "ui-username-prompt";
-    
+
     //Authentication request attributes
     public static final String USERNAME = "Username";
     public static final String COMMAND = "Command";
     public static final String API_KEY = "APIKey";
     public static final String USER_STATUS = "UserStatus";
-    
+    public static final String DEVICE_NAME = "DeviceName";
+
     //Authentication result attributes
     public static final String AUTH_STATUS = "AuthStatus";
     public static final String SUCCESS = "Success";
-    
+    public static final String SUCCEEDED = "Succeeded";
+    public static final String MESSAGE = "Message";
+    public static final String VALUE = "Value";
+
     //config properties
     public static String AUTH_URL = "authUrl";
-    public static String GENERIC_API_KEY = "genericApiKey";
+    public static String NOPASSWORD_LOGIN_KEY = "nopasswordLoginKey";
     public static String EMAIL_DOMAIN = "emailDomain";
 
 }

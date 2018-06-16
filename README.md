@@ -12,7 +12,7 @@ Follow this steps in order to install the module:
 1. Download the jar file from [here](target/nopassword-openam-auth-module-1.0.jar).
 2. Copy the **nopassword-openam-auth-module-1.0.jar** file on your server: `/path/to/tomcat/webapps/openam/WEB-INF/lib`
 3. Restart AM.
-4. Login into NoPassword admin portal and open the `Keys` menu on the left side. Copy the **Generic API** key value by clicking in the green button and save it for later.
+4. Login into NoPassword admin portal and open the `Keys` menu on the left side. Copy the **NoPassword Login** key value by clicking in the green button and save it for later.
 
 ![image alt text](/images/generic_api_key.png)
 
@@ -22,12 +22,12 @@ Follow this steps in order to install the module:
 ![image](/images/add_module_1.png)
 
 7. Set the email domain from you organization.
-8. Set the Generic API Key. Paste you generic API key from step 4 here.
+8. Set the NoPassword LoginI Key. Paste you NoPassword Login key from step 4 here.
 
 ![image alt text](/images/add_module_2.png)
 
 9. Save changes.
 10. You can test the NoPassword authentication module by accessing this URL in your browser `https://YOUR_AM_SERVER_HERE/openam/XUI/?realm=/#login/&module=NoPassword`.</br>
-11. Enter your username and hit enter. An authentication request will be send to NoPassword through the AM module. NoPassword will verify you username and key. If everything is correct you should get an authentication request on your phone.
+11. Enter your username and hit enter. NoPassword AM Module will search for user email (mail or email attribute) in the data store if email is empty an email address will be generated from user DN. An authentication request will be send to NoPassword through the AM module. NoPassword will verify you username and key. If everything is correct you should get an authentication request on your phone.
 
 ![image](/images/demo_auth.png)

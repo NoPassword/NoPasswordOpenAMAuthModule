@@ -1,7 +1,5 @@
 package com.nopassword.openam;
 
-import com.nopassword.openam.utils.AuthHelper;
-import com.nopassword.openam.utils.Constants;
 import java.util.Map;
 import org.testng.Assert;
 import org.testng.Assert.ThrowingRunnable;

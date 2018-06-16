@@ -16,7 +16,7 @@
 /**
  * Portions Copyright 2018 Wiacts Inc.
  */
-package com.nopassword.openam.utils;
+package com.nopassword.openam;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.identity.shared.debug.Debug;
@@ -75,24 +75,24 @@ public class AuthHelper {
         return mapper.readValue(input.toString(), resultType);
     }
 
-    public static boolean authenticateUser(String username, String authURL, String genericAPIKey) {
+    public static boolean authenticateUser(String username, String authURL, String nopasswordLoginKey) {
         try {
-            Map request = makeAuthRequest(username, genericAPIKey);
-            Map<String, String> response = doPost(authURL, request, Map.class);
-            boolean result = Constants.SUCCESS.equals(response.get(Constants.AUTH_STATUS));
-            if (!result) {
-                DEBUG.message(
-                        String.format("User authentication failed - %s: %s",
-                                username, response.get(Constants.AUTH_STATUS)));
+            Map request = makeAuthRequest(username, nopasswordLoginKey);
+            Map<String, Object> response = doPost(authURL, request, Map.class);
+            DEBUG.message(response.toString());
+
+            if ((boolean) response.get(Constants.SUCCEEDED)) {
+                String result = (String) ((Map) response.get(Constants.VALUE)).get(Constants.AUTH_STATUS);
+                return Constants.SUCCESS.equals(result);
+            } else {
+                DEBUG.error(String.format("User authentication failed: %s", username, response.get(Constants.MESSAGE)));
             }
-            return result;
         } catch (IOException ex) {
             DEBUG.message("Error authenticating user: " + username, ex);
-            return false;
-        } catch(IllegalArgumentException ex) {
+        } catch (IllegalArgumentException ex) {
             DEBUG.message("invalid authentication request", ex);
-            return false;
         }
+        return false;
     }
 
     public static Map makeAuthRequest(String username, String apiKey) {
@@ -100,15 +100,15 @@ public class AuthHelper {
             DEBUG.message("Invalid user: " + username);
             throw new IllegalArgumentException("invalid user");
         }
-        
-        if(!isValidAPIKey(apiKey)) {
+
+        if (!isValidAPIKey(apiKey)) {
             throw new IllegalArgumentException("invalid API key");
         }
 
         Map<String, String> request = new HashMap();
         request.put(Constants.API_KEY, apiKey);
         request.put(Constants.USERNAME, username);
-        request.put(Constants.COMMAND, Constants.USER_STATUS);
+        request.put(Constants.DEVICE_NAME, "ForgeRock AM");
         return request;
     }
 
@@ -119,8 +119,8 @@ public class AuthHelper {
 
         return username.indexOf('@') >= 1;
     }
-    
-    public static boolean isValidAPIKey(String apiKey){
+
+    public static boolean isValidAPIKey(String apiKey) {
         return apiKey == null ? false : API_KEY_REGEX.matcher(apiKey).matches();
     }
 

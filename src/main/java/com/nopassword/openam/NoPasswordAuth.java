@@ -18,8 +18,6 @@
  */
 package com.nopassword.openam;
 
-import com.nopassword.openam.utils.AuthHelper;
-import com.nopassword.openam.utils.Constants;
 import java.security.Principal;
 import java.util.Map;
 import java.util.ResourceBundle;
@@ -61,7 +59,7 @@ public class NoPasswordAuth extends AMLoginModule {
     private Map<String, Set<String>> options;
     private ResourceBundle bundle;
     private Map<String, String> sharedState;
-    private String genericAPIKey;
+    private String nopasswordLoginKey;
     private String authURL;
 
     public NoPasswordAuth() {
@@ -82,7 +80,7 @@ public class NoPasswordAuth extends AMLoginModule {
         this.options = options;
         this.sharedState = sharedState;
         this.bundle = amCache.getResBundle("amAuthNoPasswordAuth", getLoginLocale());
-        this.genericAPIKey = CollectionHelper.getMapAttr(options, Constants.GENERIC_API_KEY);
+        this.nopasswordLoginKey = CollectionHelper.getMapAttr(options, Constants.NOPASSWORD_LOGIN_KEY);
         this.authURL = CollectionHelper.getMapAttr(options, Constants.AUTH_URL);
     }
 
@@ -109,39 +107,20 @@ public class NoPasswordAuth extends AMLoginModule {
 
                 String realm = DNMapper.orgNameToRealmName(getRequestOrg());
                 AMIdentity userIdentity = new CoreWrapper().getIdentity(username, realm);
-                String email;
 
                 if (userIdentity == null) {
                     setErrorText(USER_NOT_FOUND);
                     return STATE_ERROR;
                 }
 
-                try {
-                    Set<String> a = new HashSet<>();
-                    a.add("mail");
-                    a.add("email");
-                    Map attrs = userIdentity.getAttributes(a);
-                    HashSet<String> emailSet = (HashSet) attrs.get("mail");
+                String email = getEmail(userIdentity);
 
-                    if (!emailSet.isEmpty()) {
-                        email = emailSet.iterator().next();
-                    } else {
-                        emailSet = (HashSet) attrs.get("email");
-
-                        if (emailSet.isEmpty()) {
-                            setErrorText(USER_EMAIL_NOT_FOUND);
-                            return STATE_ERROR;
-                        }
-
-                        email = emailSet.iterator().next();
-                    }
-                } catch (Exception ex) {
-                    DEBUG.message("An error ocurred when getting user email: " + username, ex);
-                    setErrorText(CONTACT_ADMINISTRATOR);
+                if (email.isEmpty()) {
+                    setErrorText(USER_EMAIL_NOT_FOUND);
                     return STATE_ERROR;
                 }
 
-                if (AuthHelper.authenticateUser(email, authURL, genericAPIKey)) {
+                if (AuthHelper.authenticateUser(email, authURL, nopasswordLoginKey)) {
                     storeUsername(username);
                     return ISAuthConstants.LOGIN_SUCCEED;
                 } else {
@@ -170,6 +149,59 @@ public class NoPasswordAuth extends AMLoginModule {
         substituteHeader(STATE_AUTH, bundle.getString(Constants.UI_LOGIN_HEADER));
         replaceCallback(STATE_AUTH, 0, new NameCallback(
                 bundle.getString(Constants.UI_USERANAME_PROMPT)));
+    }
+
+    private String getEmail(AMIdentity userIdentity) throws AuthLoginException {
+        String email = "";
+        try {
+            Set<String> a = new HashSet<>();
+            a.add("mail");
+            a.add("email");
+            a.add("dn");
+            Map attrs = userIdentity.getAttributes(a);
+            HashSet<String> emailSet = (HashSet) attrs.get("mail");
+
+            //check mail and email attributes
+            if (!emailSet.isEmpty()) {
+                email = emailSet.iterator().next();
+            } else {
+                emailSet = (HashSet) attrs.get("email");
+                if (!emailSet.isEmpty()) {
+                    email = emailSet.iterator().next();
+                }
+            }
+
+            //if both mail and email are empty, then get email from dn
+            if (email == null || email.isEmpty()) {
+                Set<String> dnSet = userIdentity.getAttribute("dn");
+                email = getEmailFromDN(dnSet.iterator().next());    //userIdentity.getDn() return null!!!
+            }
+        } catch (Exception ex) {
+            DEBUG.message("An error ocurred when getting user email: " + username, ex);
+            setErrorText(CONTACT_ADMINISTRATOR);
+        }
+        return email;
+    }
+
+    private String getEmailFromDN(String dn) {
+        if (dn == null || !dn.contains("dc=")) {
+            return "";
+        }
+
+        String[] dc = dn.split(",dc=");
+        int eqIdx = dn.indexOf('=');
+        StringBuilder sb = new StringBuilder();
+        sb.append(dn.substring(eqIdx + 1, dn.indexOf(',', eqIdx)))
+                .append('@');
+
+        for (int i = 1; i < dc.length; i++) {
+            sb.append(dc[i]);
+
+            if (i < dc.length - 1) {
+                sb.append('.');
+            }
+        }
+        return sb.toString();
     }
 
 }
