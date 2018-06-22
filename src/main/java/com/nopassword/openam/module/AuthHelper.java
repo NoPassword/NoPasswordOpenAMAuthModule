@@ -78,6 +78,7 @@ public class AuthHelper {
     public static boolean authenticateUser(String username, String authURL, String nopasswordLoginKey) {
         try {
             Map request = makeAuthRequest(username, nopasswordLoginKey);
+            DEBUG.message(request.toString());
             Map<String, Object> response = doPost(authURL, request, Map.class);
             DEBUG.message(response.toString());
 
@@ -88,9 +89,9 @@ public class AuthHelper {
                 DEBUG.error(String.format("User authentication failed: %s", username, response.get(Constants.MESSAGE)));
             }
         } catch (IOException ex) {
-            DEBUG.message("Error authenticating user: " + username, ex);
+            DEBUG.error("Error authenticating user: " + username, ex);
         } catch (IllegalArgumentException ex) {
-            DEBUG.message("invalid authentication request", ex);
+            DEBUG.error("invalid authentication request", ex);
         }
         return false;
     }
