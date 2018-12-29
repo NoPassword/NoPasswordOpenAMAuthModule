@@ -17,5 +17,5 @@
 # This file is used by the service loader to find implementations of org.forgerock.openam.plugins.AmPlugin
 # In this case, we are providing our new plugin, which will then be picked up and executed by OpenAM.
 # For more information on service loading, see the javadoc for the ServiceLoader class.
-# Portions Copyright 2018 Wiacts Inc.
+# Portions Copyright 2018 NoPassword Inc.
 com.nopassword.openam.module.NoPasswordAuthPlugin
