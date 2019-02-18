@@ -26,7 +26,9 @@ public class Constants {
 
     //i18n properties
     public static final String UI_LOGIN_HEADER = "ui-login-header";
+    public static String UI_REGISTER_HEADER = "ui-register-header";
     public static final String UI_USERANAME_PROMPT = "ui-username-prompt";
+    public static String UI_PASSWORD_PROMPT = "ui-password-prompt";
 
     //Authentication request attributes
     public static final String USERNAME = "Username";
@@ -44,7 +46,12 @@ public class Constants {
 
     //config properties
     public static String AUTH_URL = "authUrl";
+    public static String PROVISIONING_URL = "provisioningUrl";
+    public static String AM_AUTH_MODULE_URL = "authModuleUrl";
     public static String NOPASSWORD_LOGIN_KEY = "nopasswordLoginKey";
+    public static String GENERIC_API_KEY = "genericAPIKey";
+    public static String PUBLIC_KEY = "publicKey";
+    public static String PRIVATE_KEY = "privateKey";
     public static String EMAIL_DOMAIN = "emailDomain";
 
 }

@@ -18,24 +18,32 @@
  */
 package com.nopassword.openam.module;
 
-import java.security.Principal;
+import com.iplanet.sso.SSOException;
+import com.nopassword.common.crypto.RSAUtils;
+import com.nopassword.provisioning.UsersProvisioning;
+import com.nopassword.provisioning.model.User;
 import java.util.Map;
 import java.util.ResourceBundle;
 import java.util.Set;
 
 import javax.security.auth.Subject;
 import javax.security.auth.callback.Callback;
-import javax.security.auth.callback.NameCallback;
 import javax.security.auth.login.LoginException;
 
 import com.sun.identity.authentication.spi.AMLoginModule;
 import com.sun.identity.authentication.spi.AuthLoginException;
 import com.sun.identity.authentication.util.ISAuthConstants;
 import com.sun.identity.idm.AMIdentity;
+import com.sun.identity.idm.IdRepoException;
 import com.sun.identity.shared.datastruct.CollectionHelper;
 import com.sun.identity.shared.debug.Debug;
 import com.sun.identity.sm.DNMapper;
+import java.io.ByteArrayInputStream;
+import java.security.Principal;
 import java.util.HashSet;
+import java.util.Iterator;
+import javax.security.auth.callback.NameCallback;
+import javax.security.auth.callback.PasswordCallback;
 import org.forgerock.openam.core.CoreWrapper;
 
 public class NoPasswordAuth extends AMLoginModule {
@@ -43,11 +51,15 @@ public class NoPasswordAuth extends AMLoginModule {
     // Name for the debug-log
     private final static Debug DEBUG = Debug.getInstance("NoPasswordAuth");
     private String username;
+    private String email;
+    private String firstName;
+    private String lastName;
 
     // Orders defined in the callbacks file
     private final static int STATE_BEGIN = 1;
     private final static int STATE_AUTH = 2;
-    private final static int STATE_ERROR = 3;
+    private final static int STATE_LOCAL_AUTH = 3;
+    private final static int STATE_ERROR = 4;
 
     // Errors properties
     private final static String USER_NOT_FOUND = "error-user-not-found";
@@ -56,10 +68,26 @@ public class NoPasswordAuth extends AMLoginModule {
     private final static String INVALID_USER = "error-invalid-user";
     private final static String ACCESS_DENIED = "error-access-denied";
 
+    // LDAP directory attributes
+    private static final String DN = "dn";
+    private static final String GIVEN_NAME = "givenName";
+    private static final String SN = "sn";
+    private static final String EMAIL = "mail";
+    private static final String USER_PPAL_NAME = "userPrincipal";
+
+    private static final String RSA_PUBLIC_KEY_HEADER = "-----BEGIN PUBLIC KEY-----";
+    private static final String RSA_PUBLIC_KEY_FOOTER = "-----END PUBLIC KEY-----";
+    private static final String RSA_PRIVATE_KEY_HEADER = "-----BEGIN RSA PRIVATE KEY-----";
+    private static final String RSA_PRIVATE_KEY_FOOTER = "-----END RSA PRIVATE KEY-----";
+
     private Map<String, Set<String>> options;
     private ResourceBundle bundle;
     private Map<String, String> sharedState;
     private String nopasswordLoginKey;
+    private String genericAPIKey;
+    private String provisioningURL;
+    private String amAuthModuleURL;
+    private UsersProvisioning provisioning;
     private String authURL;
 
     public NoPasswordAuth() {
@@ -81,7 +109,46 @@ public class NoPasswordAuth extends AMLoginModule {
         this.sharedState = sharedState;
         this.bundle = amCache.getResBundle("amAuthNoPasswordAuth", getLoginLocale());
         this.nopasswordLoginKey = CollectionHelper.getMapAttr(options, Constants.NOPASSWORD_LOGIN_KEY);
+        this.genericAPIKey = CollectionHelper.getMapAttr(options, Constants.GENERIC_API_KEY);
         this.authURL = CollectionHelper.getMapAttr(options, Constants.AUTH_URL);
+        this.provisioningURL = CollectionHelper.getMapAttr(options, Constants.PROVISIONING_URL);
+        this.amAuthModuleURL = CollectionHelper.getMapAttr(options, Constants.AM_AUTH_MODULE_URL);
+
+        DEBUG.message("provisioning URL = " + provisioningURL);
+        DEBUG.message("auth module URL = " + amAuthModuleURL);
+
+        String publicKey = formatRSAKey(
+                CollectionHelper.getMapAttr(options, Constants.PUBLIC_KEY),
+                RSA_PUBLIC_KEY_HEADER, RSA_PUBLIC_KEY_FOOTER);
+        String privateKey = formatRSAKey(
+                CollectionHelper.getMapAttr(options, Constants.PRIVATE_KEY),
+                RSA_PRIVATE_KEY_HEADER, RSA_PRIVATE_KEY_FOOTER);
+
+        if (publicKey != null && privateKey != null) {
+            try {
+                provisioning = new UsersProvisioning(
+                        RSAUtils.loadPublicKey(new ByteArrayInputStream(publicKey.getBytes())),
+                        RSAUtils.loadPrivateKey(new ByteArrayInputStream(privateKey.getBytes())),
+                        this.genericAPIKey,
+                        this.provisioningURL
+                );
+            } catch (Exception ex) {
+                DEBUG.error("Error loading NoPassword Module RSA keys", ex);
+                throw new RuntimeException("Error loading NoPassword Module RSA keys");
+            }
+        }
+    }
+
+    public String formatRSAKey(String key, String header, String footer) {
+        if (key == null) {
+            return null;
+        }
+
+        key = key.replace(header, "")
+                .replace(footer, "")
+                .replaceAll(" ", "\n");
+
+        return String.format("%s%s%s", header, key, footer);
     }
 
     @Override
@@ -93,7 +160,6 @@ public class NoPasswordAuth extends AMLoginModule {
                 // modify the UI and proceed to next state
                 substituteUIStrings();
                 return STATE_AUTH;
-
             case STATE_AUTH:
                 // Get data from callbacks. Refer to callbacks XML file.
                 NameCallback nc = (NameCallback) callbacks[0];
@@ -113,18 +179,52 @@ public class NoPasswordAuth extends AMLoginModule {
                     return STATE_ERROR;
                 }
 
-                String email = getEmail(userIdentity);
+                retrieveUserAttributes(userIdentity);
 
-                if (email.isEmpty()) {
+                if (email == null) {
                     setErrorText(USER_EMAIL_NOT_FOUND);
                     return STATE_ERROR;
                 }
 
+                // check if user exists in NoPassword db
+                try {
+                    if (!userExists(email)) {
+                        collectPassword();
+                        return STATE_LOCAL_AUTH;
+                    }
+                } catch (Exception e) {
+                    DEBUG.error("Error verifying if user " + username + " exists at NoPassword", e);
+                    setErrorText(CONTACT_ADMINISTRATOR);
+                    return STATE_ERROR;
+                }
+
+                // if user exists, then authenticate with NoPassword
                 if (AuthHelper.authenticateUser(email, authURL, nopasswordLoginKey)) {
                     storeUsername(username);
                     return ISAuthConstants.LOGIN_SUCCEED;
                 } else {
                     setErrorText(ACCESS_DENIED);
+                    return STATE_ERROR;
+                }
+            case STATE_LOCAL_AUTH:
+                DEBUG.message(String.format("local authentication for {username=%s, FirstName=%s, LastName=%s, Email=%s}", username, firstName, lastName, email));
+                PasswordCallback pwdCB = (PasswordCallback) callbacks[0];
+                String password = new String(pwdCB.getPassword());
+
+                // user doesn't exist in NoPassword db, perform local auth
+                if (AuthHelper.authenticateLocalUser(username, password, amAuthModuleURL)) {
+                    DEBUG.message("provision the user to NoPassword");
+                    try {
+                        // provision the user to NoPassword
+                        userProvisioning();
+                        return ISAuthConstants.LOGIN_SUCCEED;
+                    } catch (Exception e) {
+                        DEBUG.error("Error provisioning user " + username + " to NoPassword", e);
+                        setErrorText(CONTACT_ADMINISTRATOR);
+                        return STATE_ERROR;
+                    }
+                } else {
+                    DEBUG.message("local authentication failed");
                     return STATE_ERROR;
                 }
             case STATE_ERROR:
@@ -139,10 +239,24 @@ public class NoPasswordAuth extends AMLoginModule {
         return new NoPasswordAuthPrincipal(username);
     }
 
+    private boolean userExists(String email) throws Exception {
+        return provisioning.isUserExists(email);
+    }
+
     private void setErrorText(String err) throws AuthLoginException {
         // Receive correct string from properties and substitute the
         // header in callbacks order 3.
         substituteHeader(STATE_ERROR, bundle.getString(err));
+    }
+
+    public boolean userProvisioning() throws Exception {
+        User user = new User(email, firstName, lastName);
+        return provisioning.addUser(user);
+    }
+
+    private void collectPassword() throws AuthLoginException {
+        substituteHeader(STATE_AUTH, bundle.getString(Constants.UI_REGISTER_HEADER));
+        replaceCallback(STATE_LOCAL_AUTH, 0, new PasswordCallback(bundle.getString(Constants.UI_PASSWORD_PROMPT), false));
     }
 
     private void substituteUIStrings() throws AuthLoginException {
@@ -151,36 +265,39 @@ public class NoPasswordAuth extends AMLoginModule {
                 bundle.getString(Constants.UI_USERANAME_PROMPT)));
     }
 
-    private String getEmail(AMIdentity userIdentity) throws AuthLoginException {
-        String email = "";
+    private void retrieveUserAttributes(AMIdentity userIdentity) throws AuthLoginException {
+        DEBUG.message("retrieve user attributes - " + userIdentity.getName());
         try {
             Set<String> a = new HashSet<>();
-            a.add("mail");
-            a.add("email");
-            a.add("dn");
-            Map attrs = userIdentity.getAttributes(a);
-            HashSet<String> emailSet = (HashSet) attrs.get("mail");
+            a.add(EMAIL);
+            a.add(USER_PPAL_NAME);
+            a.add(DN);
+            a.add(SN);
+            a.add(GIVEN_NAME);
 
-            //check mail and email attributes
-            if (!emailSet.isEmpty()) {
-                email = emailSet.iterator().next();
-            } else {
-                emailSet = (HashSet) attrs.get("email");
-                if (!emailSet.isEmpty()) {
-                    email = emailSet.iterator().next();
-                }
-            }
+            email = getAttribute(EMAIL, userIdentity);
+            lastName = getAttribute(SN, userIdentity);
+            firstName = getAttribute(GIVEN_NAME, userIdentity);
 
             //if both mail and email are empty, then get email from dn
-            if (email == null || email.isEmpty()) {
-                Set<String> dnSet = userIdentity.getAttribute("dn");
-                email = getEmailFromDN(dnSet.iterator().next());    //userIdentity.getDn() return null!!!
+            if (email == null) {
+                String dn = getAttribute(DN, userIdentity);
+                email = getEmailFromDN(dn);    //userIdentity.getDn() return null!!!
             }
-        } catch (Exception ex) {
+        } catch (SSOException | IdRepoException ex) {
             DEBUG.message("An error ocurred when getting user email: " + username, ex);
             setErrorText(CONTACT_ADMINISTRATOR);
         }
-        return email;
+    }
+
+    private String getAttribute(String attr, AMIdentity userIdentity) throws IdRepoException, SSOException {
+        Set<String> attrs = userIdentity.getAttribute(attr);
+        Iterator<String> iterator = attrs.iterator();
+
+        while (iterator.hasNext()) {
+            return iterator.next();
+        }
+        return null;
     }
 
     private String getEmailFromDN(String dn) {
