@@ -255,7 +255,7 @@ public class NoPasswordAuth extends AMLoginModule {
     }
 
     private void collectPassword() throws AuthLoginException {
-        substituteHeader(STATE_AUTH, bundle.getString(Constants.UI_REGISTER_HEADER));
+        substituteHeader(STATE_LOCAL_AUTH, bundle.getString(Constants.UI_REGISTER_HEADER));
         replaceCallback(STATE_LOCAL_AUTH, 0, new PasswordCallback(bundle.getString(Constants.UI_PASSWORD_PROMPT), false));
     }
 
